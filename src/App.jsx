@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 import NailDetector from './components/NailDetector'
+import NailDetectorSimple from './components/NailDetectorSimple'
+import Simple from './components/simple_example'
 
 function App() {
 
@@ -12,7 +12,7 @@ function App() {
       <div className="">
         <p>Say goodbye to your bad nail-biting habit!</p>
       </div>
-      <NailDetector />
+      <Simple />
     </>
   )
 }
