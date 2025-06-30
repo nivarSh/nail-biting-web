@@ -5,20 +5,25 @@ import {
     DrawingUtils,
 } from "@mediapipe/tasks-vision";
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 export default function HandDetector() {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const handLandmarkerRef = useRef(null);
     const faceLandmarkerRef = useRef(null);
+    const [nailBiting, setNailBiting] = useState(false)
 
-    const MOUTH_LANDMARKS = [
-      // inner lip lower
-      78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
-      // inner lip lower
-      42, 41, 38, 12, 268, 
-    ];
+    // Temporal tracking state
+    const nailBitingStateRef = useRef({
+      detectionHistory: [], // Rolling window of recent detections
+      windowSize: 30, // frames (~1 second at 30fps)
+      consecutiveFrames: 0,
+      minConsecutiveFrames: 8, // Must detect for 8+ frames
+      confidenceThreshold: 0.4, // 40% of recent frames must be positive
+      lastDetectionTime: 0,
+      cooldownPeriod: 1000, // 1 second cooldown after detection
+    });
 
     useEffect(() => {
         const createHandLandmarker = async () => {
@@ -33,6 +38,7 @@ export default function HandDetector() {
                 },
                 runningMode: 'VIDEO',
                 numHands: 2,
+                minHandDetectionConfidence: 0.7,
             });
 
             faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
@@ -92,48 +98,50 @@ export default function HandDetector() {
             }
 
             ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
-            
-            // Draw hands
-            if (handResults.landmarks && handResults.landmarks.length > 0) {
+
+            setNailBiting(false)
+
+            // determine if nail biting is gonna occur
+            if (handResults.landmarks && faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
 
               // Save the current transformation matrix
               ctx.save();
-              
-              // Apply transformation to match the video scaling
-              ctx.translate(offsetX, offsetY);
+              ctx.translate(offsetX, offsetY); // Apply transformation to match the video scaling
               ctx.scale(drawWidth / canvas.width, drawHeight / canvas.height);
 
               const drawingUtils = new DrawingUtils(ctx);
 
-              for (const landmarks of handResults.landmarks) {
-                  drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, {
-                      color: '#00FF00',
-                      lineWidth: 2,
-                  });
-                  drawingUtils.drawLandmarks(landmarks, { color: '#FF0000', lineWidth: 1 });
-              }
+              // for (const faceLandmarks of faceResults.faceLandmarks) {
+              //     drawingUtils.drawLandmarks(faceLandmarks, { color: '#00FFFF', lineWidth: 1 });
+              // }
               
-              // Restore the original transformation matrix
-              ctx.restore();
-            }
+              // Extract mouth center & draw facial landmarks
+              const mouthCenter = faceResults.faceLandmarks[0][13];
+              drawingUtils.drawLandmarks([mouthCenter], { color: '#00FFFF', lineWidth: 1 });
 
-            // Draw face mesh
-            if (faceResults.faceLandmarks) {
+              for (const handLandmarks of handResults.landmarks) {
 
-              const drawingUtils = new DrawingUtils(ctx);
+                const fingertipIndices = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky
 
-              // Save the current transformation matrix
-              ctx.save();
-              
-              // Apply transformation to match the video scaling
-              ctx.translate(offsetX, offsetY);
-              ctx.scale(drawWidth / canvas.width, drawHeight / canvas.height);
+                for (const fingertipIndex of fingertipIndices) {
+                  const fingertip = handLandmarks[fingertipIndex]
+                  drawingUtils.drawLandmarks([fingertip], { color: '#FF0000', lineWidth: 1 });
 
-              for (const landmarks of faceResults.faceLandmarks) {
-                const mouthPoints = MOUTH_LANDMARKS.map(i => landmarks[i]);
-                drawingUtils.drawLandmarks(mouthPoints, { color: '#00FFFF', lineWidth: 1 });
+                  const distance = calculate3DDistance(fingertip, mouthCenter)
+
+                  if (fingertipIndex === 8){
+                    console.log(`Fingertip ${fingertipIndex} distance to mouth: ${distance.toFixed(4)}`);
+                  }
+                  // console.log(`Fingertip ${fingertipIndex} distance to mouth: ${distance.toFixed(4)}`);
+
+                  if (distance < 0.05) {
+                    setNailBiting(true)
+                    console.log(`NAIL BITING DETECTED! Fingertip ${fingertipIndex}`);
+                  }
+                }
               }
 
+              
               // Restore the original transformation matrix
               ctx.restore();
             }
@@ -141,10 +149,18 @@ export default function HandDetector() {
             requestAnimationFrame(processVideoFrame);
           };
 
+          function calculate3DDistance(point1, point2, zWeight = 3) {
+            const dx = point1.x - point2.x;
+            const dy = point1.y - point2.y;
+            const dz = (point1.z - point2.z) * zWeight;
+            return Math.sqrt(dx*dx + dy*dy + dz*dz);
+          }
+
           createHandLandmarker();
     }, []);
 
     return (
+      <>
         <div className="relative rounded-lg overflow-hidden shadow-lg w-[640px] h-[480px]">
           <video
             ref={videoRef}
@@ -163,5 +179,10 @@ export default function HandDetector() {
             className="absolute top-0 left-0 bg-gray-900"
           />
         </div>
+
+        { nailBiting && (
+            <h1>NAIL BITING OCCURED!!!!!</h1>
+        )}
+      </>
     )
 }
