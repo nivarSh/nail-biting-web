@@ -1,324 +1,290 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import {
+    HandLandmarker,
+    FaceLandmarker,
+    FilesetResolver,
+    DrawingUtils,
+} from "@mediapipe/tasks-vision";
 
-// Custom hook for MediaPipe initialization
-const useMediaPipe = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  
-  useEffect(() => {
-    const scripts = [
-      'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js',
-      'https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js',
-      'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js',
-      'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js',
-      'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js'
-    ];
+import React, { useRef, useEffect, useState } from 'react';
 
-    let loadedCount = 0;
-    const scriptElements = [];
+export default function NailDetector({ onUpdate, onDetection }) {
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const handLandmarkerRef = useRef(null);
+    const faceLandmarkerRef = useRef(null);
+    const audioRef = useRef(null);
 
-    scripts.forEach((src, index) => {
-      const script = document.createElement('script');
-      script.src = src;
-      script.crossOrigin = 'anonymous';
-      script.onload = () => {
-        loadedCount++;
-        if (loadedCount === scripts.length) {
-          setIsLoaded(true);
-        }
-      };
-      document.head.appendChild(script);
-      scriptElements.push(script);
+    const prevDetectionRef = useRef(false)
+
+    const [nailBiting, setNailBiting] = useState(false)
+    const [tick, setTick] = useState(0);
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    // Temporal tracking state
+    const nailBitingStateRef = useRef({
+      detectionHistory: [], // Rolling window of recent detections
+      windowSize: 30, // frames (~1 second at 30fps)
+      confidenceThreshold: 0.4, // 40% of recent frames must be positive
     });
 
-    return () => {
-      scriptElements.forEach(script => {
-        if (document.head.contains(script)) {
-          document.head.removeChild(script);
-        }
-      });
-    };
-  }, []);
+    useEffect(() => {
+        const createLandmarkers = async () => {
+            const vision = await FilesetResolver.forVisionTasks(
+                'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
+            );
 
-  return isLoaded;
-};
+            handLandmarkerRef.current = await HandLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                    delegate: 'GPU',
+                },
+                runningMode: 'VIDEO',
+                numHands: 2,
+                minHandDetectionConfidence: 0.7,
+            });
 
-// Custom hook for nail bite detection logic
-const useNailBiteDetection = () => {
-  const [isDetected, setIsDetected] = useState(false);
-  const [confidence, setConfidence] = useState(0);
-  const detectionTimeoutRef = useRef(null);
+            faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+                delegate: 'GPU',
+              },
+              runningMode: 'VIDEO',
+              numFaces: 1,
+            });
 
-  const checkNailBiting = useCallback((handResults, mouthPosition, canvasSize) => {
-    if (!handResults?.multiHandLandmarks || !mouthPosition) {
-      setIsDetected(false);
-      setConfidence(0);
-      return;
-    }
+            startVideo();
+        };
 
-    let maxConfidence = 0;
-    let detectionFound = false;
+        const startVideo = async () => {
+            const video = videoRef.current;
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            await video.play();
+            requestAnimationFrame(processVideoFrame)
+            setIsInitialized(true);
+        };
 
-    for (const handLandmarks of handResults.multiHandLandmarks) {
-      // Check all fingertips (thumb, index, middle, ring, pinky)
-      const fingerTips = [4, 8, 12, 16, 20];
-      
-      for (const tipIndex of fingerTips) {
-        const fingerTip = handLandmarks[tipIndex];
-        
-        // Use 2D distance for more reliable detection
-        const distance2D = Math.hypot(
-          (fingerTip.x - mouthPosition.x) * canvasSize.width,
-          (fingerTip.y - mouthPosition.y) * canvasSize.height
-        );
+        const drawLandmarksScaled = (handResults, faceResults, ctx, video, canvas) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Normalize distance based on face size (approximate)
-        const normalizedDistance = distance2D / canvasSize.width;
-        
-        // Calculate confidence (inverse of distance, clamped)
-        const detectionConfidence = Math.max(0, 1 - (normalizedDistance * 20));
-        
-        if (normalizedDistance < 0.08) { // More reliable 2D threshold
-          detectionFound = true;
-          maxConfidence = Math.max(maxConfidence, detectionConfidence);
-        }
-      }
-    }
-
-    setConfidence(maxConfidence);
-
-    // Add temporal smoothing - require detection for 300ms
-    if (detectionFound && maxConfidence > 0.3) {
-      if (!detectionTimeoutRef.current) {
-        detectionTimeoutRef.current = setTimeout(() => {
-          setIsDetected(true);
-        }, 300);
-      }
-    } else {
-      if (detectionTimeoutRef.current) {
-        clearTimeout(detectionTimeoutRef.current);
-        detectionTimeoutRef.current = null;
-      }
-      setIsDetected(false);
-    }
-  }, []);
-
-  return { isDetected, confidence, checkNailBiting };
-};
-
-// Utility functions
-const getMouthCenter = (faceLandmarks) => {
-  // Use multiple mouth landmarks for better center calculation
-  const upperLip = faceLandmarks[13];
-  const lowerLip = faceLandmarks[14];
-  const leftCorner = faceLandmarks[308];
-  const rightCorner = faceLandmarks[78];
-  
-  return {
-    x: (upperLip.x + lowerLip.x + leftCorner.x + rightCorner.x) / 4,
-    y: (upperLip.y + lowerLip.y + leftCorner.y + rightCorner.y) / 4
-  };
-};
-
-const drawLandmarks = (ctx, handResults, mouthPosition, canvasSize) => {
-  // Draw mouth position
-  if (mouthPosition) {
-    ctx.fillStyle = 'rgba(0, 100, 255, 0.8)';
-    ctx.beginPath();
-    ctx.arc(
-      mouthPosition.x * canvasSize.width,
-      mouthPosition.y * canvasSize.height,
-      6, 0, 2 * Math.PI
-    );
-    ctx.fill();
-  }
-
-  // Draw fingertips
-  if (handResults?.multiHandLandmarks) {
-    const fingerTips = [4, 8, 12, 16, 20];
-    
-    handResults.multiHandLandmarks.forEach(handLandmarks => {
-      fingerTips.forEach(tipIndex => {
-        const tip = handLandmarks[tipIndex];
-        ctx.fillStyle = 'rgba(0, 255, 100, 0.8)';
-        ctx.beginPath();
-        ctx.arc(
-          tip.x * canvasSize.width,
-          tip.y * canvasSize.height,
-          4, 0, 2 * Math.PI
-        );
-        ctx.fill();
-      });
-    });
-  }
-};
-
-// Main component
-const NailBiteDetector = () => {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const lastMouthRef = useRef(null);
-  
-  const isMediaPipeLoaded = useMediaPipe();
-  const { isDetected, confidence, checkNailBiting } = useNailBiteDetection();
-  
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  const initializeDetection = useCallback(async () => {
-    if (!isMediaPipeLoaded || !videoRef.current || !canvasRef.current) return;
-
-    try {
-      // Initialize MediaPipe models
-      const hands = new window.Hands({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-      });
-
-      hands.setOptions({
-        maxNumHands: 2,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.6
-      });
-
-      const faceMesh = new window.FaceMesh({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-      });
-
-      faceMesh.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.4
-      });
-
-      // State for current detection results
-      let currentHandResults = null;
-      let currentFaceResults = null;
-
-      const processFrame = () => {
-        const canvas = canvasRef.current;
-        const video = videoRef.current;
-        if (!canvas || !video) return;
-
-        const ctx = canvas.getContext('2d');
-        const canvasSize = { width: canvas.width, height: canvas.height };
-        
-        // Draw video frame
-        ctx.drawImage(video, 0, 0, canvasSize.width, canvasSize.height);
-
-        // Get mouth position
-        let mouthPosition = lastMouthRef.current;
-        if (currentFaceResults?.multiFaceLandmarks?.[0]) {
-          mouthPosition = getMouthCenter(currentFaceResults.multiFaceLandmarks[0]);
-          lastMouthRef.current = mouthPosition;
-        }
-
-        // Draw landmarks
-        drawLandmarks(ctx, currentHandResults, mouthPosition, canvasSize);
-
-        // Check for nail biting
-        checkNailBiting(currentHandResults, mouthPosition, canvasSize);
-      };
-
-      // Set up result handlers
-      hands.onResults((results) => {
-        currentHandResults = results;
-        processFrame();
-      });
-
-      faceMesh.onResults((results) => {
-        currentFaceResults = results;
-        processFrame();
-      });
-
-      // Start camera
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' }
-      });
-      
-      videoRef.current.srcObject = stream;
-      
-      videoRef.current.onloadedmetadata = () => {
-        videoRef.current.play();
-        
-        const camera = new window.Camera(videoRef.current, {
-          onFrame: async () => {
-            // Staggered processing for better performance
-            await hands.send({ image: videoRef.current });
+            // Calculate scaling and positioning to maintain aspect ratio
+            const videoAspect = video.videoWidth / video.videoHeight;
+            const canvasAspect = canvas.width / canvas.height;
             
-            // Process face less frequently
-            if (Math.random() < 0.3) {
-              await faceMesh.send({ image: videoRef.current });
+            let drawWidth, drawHeight, offsetX, offsetY;
+            
+            if (videoAspect > canvasAspect) {
+                // Video is wider than canvas - fit by height
+                drawHeight = canvas.height;
+                drawWidth = drawHeight * videoAspect;
+                offsetX = (canvas.width - drawWidth) / 2;
+                offsetY = 0;
+            } else {
+                // Video is taller than canvas - fit by width
+                drawWidth = canvas.width;
+                drawHeight = drawWidth / videoAspect;
+                offsetX = 0;
+                offsetY = (canvas.height - drawHeight) / 2;
             }
-          },
-          width: 640,
-          height: 480
-        });
-        
-        camera.start();
-        setIsInitialized(true);
-      };
-    } catch (error) {
-      console.error('Failed to initialize detection:', error);
-    }
-  }, [isMediaPipeLoaded, checkNailBiting]);
 
-  useEffect(() => {
-    if (isMediaPipeLoaded && !isInitialized) {
-      initializeDetection();
-    }
-  }, [isMediaPipeLoaded, isInitialized, initializeDetection]);
+            ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 
-  return (
-    <div className="relative max-w-2xl mx-auto p-4">
-      <div className="relative rounded-lg overflow-hidden shadow-lg">
-        <video
-          ref={videoRef}
-          className="hidden"
-          width="640"
-          height="480"
-          autoPlay
-          muted
-          playsInline
-        />
-        
-        <canvas
-          ref={canvasRef}
-          width="640"
-          height="480"
-          className="block w-full h-auto bg-gray-900"
-        />
-        
-        {/* Status indicators */}
-        <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-          <div className={`px-3 py-1 rounded text-sm font-medium ${
-            isInitialized ? 'bg-green-500 text-white' : 'bg-yellow-500 text-black'
-          }`}>
-            {isInitialized ? 'Active' : 'Loading...'}
-          </div>
-          
-          {confidence > 0 && (
-            <div className="px-3 py-1 rounded text-sm bg-blue-500 text-white">
-              Confidence: {Math.round(confidence * 100)}%
+            // determine if nail biting is gonna occur
+            if (handResults.landmarks && faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
+
+              // Save the current transformation matrix
+              ctx.save();
+              ctx.translate(offsetX, offsetY); // Apply transformation to match the video scaling
+              ctx.scale(drawWidth / canvas.width, drawHeight / canvas.height);
+
+              const drawingUtils = new DrawingUtils(ctx);
+              
+              // draw mouth center
+              const mouthCenter = faceResults.faceLandmarks[0][13];
+              drawingUtils.drawLandmarks([mouthCenter], { color: '#00FFFF', lineWidth: 1 });
+
+              for (const handLandmarks of handResults.landmarks) {
+                const fingertipIndices = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky
+
+                for (const fingertipIndex of fingertipIndices) {
+                  const fingertip = handLandmarks[fingertipIndex]
+                  drawingUtils.drawLandmarks([fingertip], { color: '#FF0000', lineWidth: 1 });
+                }
+              }
+              // Restore the original transformation matrix
+              ctx.restore();
+            }
+        }
+
+        /**
+         * @returns {{handedness: string, finger: number, distance: number}|null}
+         */
+        const detectNailBitingFrame = (handResults, faceResults) => {
+
+            const threshold = 0.08
+            // determine if nail biting is gonna occur
+            if (handResults.landmarks && faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
+              
+              // Extract mouth center & draw facial landmarks
+              const mouthCenter = faceResults.faceLandmarks[0][13];
+
+              // for each hand, look at its landmarks AND its handedness
+              for (let hIdx = 0; hIdx < handResults.landmarks.length; hIdx++) {
+                const handLandmarks = handResults.landmarks[hIdx];
+                const handedness = handResults.handedness?.[hIdx]?.[hIdx]?.categoryName || "Unknown"
+
+                const fingertipIndices = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky
+
+                // for each fingertip, identify if it is close to the mouth
+                for (const fingertipIndex of fingertipIndices) {
+                  const fingertipData = handLandmarks[fingertipIndex]
+
+                  const distance = calculate3DDistance(fingertipData, mouthCenter)
+
+                  if (distance < threshold) {
+                    // console.log(`NAIL BITING DETECTED! Fingertip ${fingertipIndex}`);
+
+                    // store which fingerTip it is (easy)
+                    // store the handedness
+                    return { handedness, finger: fingertipIndex, distance };
+                  }
+                }
+              }
+            }
+            return null;
+        }
+
+        const detectTemporalNailBiting = (handResults, faceResults) => {
+          // 1. Get frane result (T/F)
+          const frameEvent = detectNailBitingFrame(handResults, faceResults);
+          const frameResult = Boolean(frameEvent);
+
+          let state = nailBitingStateRef.current;
+
+          setTick(t => t + 1); // force a render
+        //   console.log(state.detectionHistory);
+
+          // 2. if there is space ? add to history : move shift history up and add frame result
+          state.detectionHistory.push(frameResult)
+          if (state.detectionHistory.length > state.windowSize) {
+            state.detectionHistory.shift(); // Remove oldest
+          } else {  // 3. if frame is not full yet (edge case) -> exit function
+            return
+          }
+
+          // 4. filter history for TRUE results
+          const recentPositives = state.detectionHistory.filter((result) => {
+            return result
+          });
+
+          // 5. calculate and set NB moment based on threshold
+          const temporalDetection = (recentPositives.length / state.detectionHistory.length) > state.confidenceThreshold;
+
+            // …after you mutate the ref…
+            state = nailBitingStateRef.current
+
+            // send a *new* copy so React notices and re-renders
+            onUpdate({
+            windowSize: state.windowSize,
+            confidenceThreshold: state.confidenceThreshold,
+            detectionHistory: [...state.detectionHistory],
+            })
+
+            // Only identify when it changes from FALSE -> TRUE
+            if (!prevDetectionRef.current && temporalDetection) {
+                onDetection({
+                    timestamp:    Date.now(),
+                    handedness:   frameEvent.handedness,
+                    finger:       frameEvent.finger,
+                    distance:     frameEvent.distance,
+                });
+            }
+
+            prevDetectionRef.current = temporalDetection
+
+            setNailBiting(temporalDetection)
+        }
+
+        const processVideoFrame = async () => {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+
+            if (!handLandmarkerRef.current || !faceLandmarkerRef.current) return;
+
+            const now = performance.now();
+            const handResults = handLandmarkerRef.current.detectForVideo(video, now);
+            const faceResults = faceLandmarkerRef.current.detectForVideo(video, now);
+
+            // console.log('Hand Results:', handResults);
+            // console.log('Face Results:', faceResults);
+
+            // will return a true / false representing if a nail biting moment happened
+            detectTemporalNailBiting(handResults, faceResults);
+            drawLandmarksScaled(handResults, faceResults, ctx, video, canvas);
+
+            requestAnimationFrame(processVideoFrame);
+          };
+
+          function calculate3DDistance(point1, point2, zWeight = 3) {
+            const dx = point1.x - point2.x;
+            const dy = point1.y - point2.y;
+            const dz = (point1.z - point2.z) * zWeight;
+            return Math.sqrt(dx*dx + dy*dy + dz*dz);
+          }
+
+          audioRef.current = new Audio('/vine-boom.mp3');
+          audioRef.current.load();
+          createLandmarkers();
+    }, []);
+
+    useEffect(() => {
+    if (nailBiting && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {/* ignore */});
+    }
+  }, [nailBiting]);
+
+    return (
+        <>
+        <div className="flex gap-4">
+            <div className="flex flex-col gap-4">
+                <div className="relative rounded-lg overflow-hidden shadow-lg w-[640px] h-[480px]">
+                    <video
+                        ref={videoRef}
+                        className="hidden"
+                        width="640"
+                        height="480"
+                        autoPlay
+                        muted
+                        playsInline
+                    />
+                    
+                    <canvas
+                        ref={canvasRef}
+                        width="640"
+                        height="480"
+                        className="absolute top-0 left-0 bg-[#1c1c1c]"
+                    />
+
+                    <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                        <div className={`px-3 py-1 rounded text-sm font-medium ${
+                        isInitialized ? 'bg-green-500 text-white' : 'bg-yellow-500 text-black'
+                        }`}>
+                        {isInitialized ? 'Active' : 'Loading...'}
+                        </div>
+                    </div>
+
+                    {nailBiting && (
+                    <div className="absolute top-4 left-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg animate-pulse">
+                        <div className="flex items-center justify-center">
+                        <span className="text-lg font-bold">⚠️ Nail Biting Detected</span>
+                        </div>
+                    </div>
+                    )}
+                </div>
             </div>
-          )}
         </div>
-
-        {/* Detection alert */}
-        {isDetected && (
-          <div className="absolute top-4 left-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg animate-pulse">
-            <div className="flex items-center justify-center">
-              <span className="text-lg font-bold">⚠️ Nail Biting Detected</span>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <div className="mt-4 text-center text-sm text-gray-600">
-        <p>Green dots: Fingertips • Blue dot: Mouth center</p>
-        <p>Keep your hands visible for best detection</p>
-      </div>
-    </div>
-  );
-};
-
-export default NailBiteDetector;
+        </>
+    )
+}
