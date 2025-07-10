@@ -30,6 +30,21 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+
+  /* path can be relative to your CSS file or absolute URL */
+  /* background-image: url('/blakbg.png'); */
+
+  /* make it cover the whole viewport */
+  background-size: cover;
+
+  /* center the image */
+  background-position: center center;
+
+  /* prevent tiling */
+  background-repeat: no-repeat;
+
+  /* keeps image fixed when scrolling */
+  background-attachment: fixed;
 }
 
 h1 {

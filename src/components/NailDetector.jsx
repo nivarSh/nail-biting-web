@@ -131,7 +131,9 @@ export default function NailDetector({ onUpdate, onDetection }) {
               // for each hand, look at its landmarks AND its handedness
               for (let hIdx = 0; hIdx < handResults.landmarks.length; hIdx++) {
                 const handLandmarks = handResults.landmarks[hIdx];
-                const handedness = handResults.handedness?.[hIdx]?.[hIdx]?.categoryName || "Unknown"
+                const handedness = handResults.handedness?.[hIdx]?.[0]?.categoryName || "Unknown"
+
+                // console.log(handedness)
 
                 const fingertipIndices = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky
 
@@ -249,12 +251,12 @@ export default function NailDetector({ onUpdate, onDetection }) {
         <>
         <div className="flex gap-4">
             <div className="flex flex-col gap-4">
-                <div className="relative rounded-lg overflow-hidden shadow-lg w-[640px] h-[480px]">
+                <div className="relative rounded-lg overflow-hidden shadow-lg w-[640px] h-[580px]">
                     <video
                         ref={videoRef}
                         className="hidden"
                         width="640"
-                        height="480"
+                        height="580"
                         autoPlay
                         muted
                         playsInline
@@ -263,7 +265,7 @@ export default function NailDetector({ onUpdate, onDetection }) {
                     <canvas
                         ref={canvasRef}
                         width="640"
-                        height="480"
+                        height="580"
                         className="absolute top-0 left-0 bg-[#1c1c1c]"
                     />
 

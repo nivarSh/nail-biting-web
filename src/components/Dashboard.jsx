@@ -1,8 +1,11 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import Dropdown from './Dropdown'
 import HandPieChart from './HandPieChart'
+import EventLineGraph from './EventLineGraph'
 
-export default function Dashboard({ data, logs }) {
+function Dashboard({ data, logs }) {
+
+    console.count('Dashboard Render')
 
     const { detectionHistory = [] } = data || {}
 
@@ -19,20 +22,23 @@ export default function Dashboard({ data, logs }) {
     const recentLogs = useMemo(() => {
         const cutoff = Date.now() - selectedWindow * 60 * 1000
         const filteredLogs = logs.filter(evt => evt.timestamp >= cutoff)
-        console.log(filteredLogs)
         return filteredLogs
     }, [logs, selectedWindow])
 
     return (
         <div id="dashboard" className="flex flex-col gap-5 w-xs rounded-xl shadow-xl p-5 dashboard text-left">
-            <div>
-                <p className="text-lg text-gray-500 mb-2">Time Interval</p>
-                <Dropdown onSelect={setSelectedWindow} selectedWindow={selectedWindow} />
-                <p className="text-lg text-gray-500">Attempts</p>
-                <h3 className="text-green-400 font-bold text-3xl text-5xl">{recentLogs.length}</h3>
-
+            <div className="flex justify-between px-3">
+                <div className="">
+                    <p className="text-lg text-gray-500">Attempts</p>
+                    <h3 className="text-green-400 font-bold text-6xl">{recentLogs.length}</h3>
+                </div>
+                 <div className="flex flex-col align-right">
+                    <p className="text-lg text-gray-500 mb-2">Time Interval</p>
+                    <Dropdown onSelect={setSelectedWindow} selectedWindow={selectedWindow} />
+                </div>
             </div>
             <HandPieChart logs={recentLogs} />
+            <EventLineGraph logs={recentLogs} />
             <div className="w-full bg-[#2a2a2a] rounded-lg shadow-lg p-4">
                 <div className="text-gray-500">
                 
@@ -61,3 +67,5 @@ export default function Dashboard({ data, logs }) {
         </div>
     )
 }
+
+export default React.memo(Dashboard);

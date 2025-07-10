@@ -45,7 +45,7 @@ function App() {
         <p>Red dots: Fingertips • Blue dot: Mouth center</p>
         <p>Keep your hands and face visible for best detection.</p>
       </div>
-      <div className="flex gap-4">
+      <div className="flex gap-4 items-center h-[580px]">
         <NailDetector onUpdate={setDetectionData} onDetection={handleDetection} />
         <Dashboard data={detectionData} logs={eventLogs} />
       </div>
