@@ -17,7 +17,6 @@ export default function NailDetector({ onUpdate, onDetection }) {
     const prevDetectionRef = useRef(false)
 
     const [nailBiting, setNailBiting] = useState(false)
-    const [tick, setTick] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
 
     // Temporal tracking state
@@ -163,7 +162,6 @@ export default function NailDetector({ onUpdate, onDetection }) {
 
           let state = nailBitingStateRef.current;
 
-          setTick(t => t + 1); // force a render
         //   console.log(state.detectionHistory);
 
           // 2. if there is space ? add to history : move shift history up and add frame result
@@ -187,9 +185,9 @@ export default function NailDetector({ onUpdate, onDetection }) {
 
             // send a *new* copy so React notices and re-renders
             onUpdate({
-            windowSize: state.windowSize,
-            confidenceThreshold: state.confidenceThreshold,
-            detectionHistory: [...state.detectionHistory],
+              windowSize: state.windowSize,
+              confidenceThreshold: state.confidenceThreshold,
+              detectionHistory: [...state.detectionHistory],
             })
 
             // Only identify when it changes from FALSE -> TRUE
@@ -235,7 +233,7 @@ export default function NailDetector({ onUpdate, onDetection }) {
             return Math.sqrt(dx*dx + dy*dy + dz*dz);
           }
 
-          audioRef.current = new Audio('/vine-boom.mp3');
+          audioRef.current = new Audio('/bell.wav');
           audioRef.current.load();
           createLandmarkers();
     }, []);

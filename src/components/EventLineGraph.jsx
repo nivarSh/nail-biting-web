@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 
-export default function EventLineChart({ logs }) {
+function EventLineChart({ logs }) {
   // Build a time-bucketed series, formatted as "H:MM"
   const data = useMemo(() => { // useMemo, improves performance by skipping this, until logs changes
     const buckets = {}
@@ -57,3 +57,5 @@ export default function EventLineChart({ logs }) {
     </div>
   )
 }
+
+export default EventLineChart;
