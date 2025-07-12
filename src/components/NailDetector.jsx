@@ -7,13 +7,18 @@ import {
 
 import React, { useRef, useEffect, useState } from 'react';
 
+const FRAME_RATE = 15;
+const FRAME_INTERVAL = 1000 / FRAME_RATE;
+
+
 export default function NailDetector({ onUpdate, onDetection }) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const handLandmarkerRef = useRef(null);
     const faceLandmarkerRef = useRef(null);
     const audioRef = useRef(null);
-
+    
+    const frameTimerRef = useRef(null);
     const prevDetectionRef = useRef(false)
 
     const [nailBiting, setNailBiting] = useState(false)
@@ -59,7 +64,9 @@ export default function NailDetector({ onUpdate, onDetection }) {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             video.srcObject = stream;
             await video.play();
-            requestAnimationFrame(processVideoFrame)
+            frameTimerRef.current = setInterval(() => {
+              requestAnimationFrame(processVideoFrame);
+            }, FRAME_INTERVAL);
             setIsInitialized(true);
         };
 
@@ -206,6 +213,7 @@ export default function NailDetector({ onUpdate, onDetection }) {
         }
 
         const processVideoFrame = async () => {
+            console.count("Frame")
             const video = videoRef.current;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
@@ -222,8 +230,6 @@ export default function NailDetector({ onUpdate, onDetection }) {
             // will return a true / false representing if a nail biting moment happened
             detectTemporalNailBiting(handResults, faceResults);
             drawLandmarksScaled(handResults, faceResults, ctx, video, canvas);
-
-            requestAnimationFrame(processVideoFrame);
           };
 
           function calculate3DDistance(point1, point2, zWeight = 3) {
@@ -236,6 +242,12 @@ export default function NailDetector({ onUpdate, onDetection }) {
           audioRef.current = new Audio('/bell.wav');
           audioRef.current.load();
           createLandmarkers();
+
+          return () => {
+            if (frameTimerRef.current) {
+              clearInterval(frameTimerRef.current);
+            }
+          };
     }, []);
 
     useEffect(() => {

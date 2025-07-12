@@ -4,7 +4,7 @@ import StaticUpdates from './StaticUpdates'
 
 function Dashboard({ data, logs }) {
 
-    console.count('Dashboard Render')
+    // console.count('Dashboard Render')
 
     return (
         <div id="dashboard" className="flex flex-col gap-5 w-xs rounded-xl shadow-xl p-5 dashboard text-left">
