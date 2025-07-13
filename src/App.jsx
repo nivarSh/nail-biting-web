@@ -40,16 +40,16 @@ function App() {
 
 
   return (
-    <>
+    <div className="max-w-[640px] lg:max-w-full mx-auto">
       <div className="mb-4 text-center text-sm text-gray-600">
         <p>Red dots: Fingertips • Blue dot: Mouth center</p>
         <p>Keep your hands and face visible for best detection.</p>
       </div>
-      <div className="flex gap-4 items-center h-[580px]">
+      <div className="flex flex-col lg:flex-row gap-4 items-center w-full">
         <NailDetector onUpdate={setDetectionData} onDetection={handleDetection} />
         <Dashboard data={detectionData} logs={eventLogs} />
       </div>
-    </>
+    </div>
   )
 }
 

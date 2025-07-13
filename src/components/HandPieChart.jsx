@@ -26,7 +26,7 @@ export default function HandPieChart({ logs }) {
 
   if (!hasData) {
     return (
-      <div className="w-full h-32 flex items-center justify-center text-gray-500">
+      <div className="w-full h-20 lg:h-32 flex items-center justify-center text-gray-500">
         No nail-biting events to display.
       </div>
     )

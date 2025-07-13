@@ -29,7 +29,7 @@ function EventLineChart({ logs }) {
   }, [logs])
 
   return (
-    <div className="w-full h-38 mb-2">
+    <div className="w-full h-34 lg:h-38 lg:mb-2">
       <ResponsiveContainer>
         <LineChart
           data={data}

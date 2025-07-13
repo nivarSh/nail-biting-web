@@ -11,4 +11,4 @@ docker run \
   -v /app/node_modules \
   -e CHOKIDAR_USEPOLLING=true \
   nail-dev
-  ```
+```

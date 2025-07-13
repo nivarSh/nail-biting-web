@@ -59,68 +59,62 @@ export default function NailDetector({ onUpdate, onDetection }) {
             startVideo();
         };
 
-        const startVideo = async () => {
-            const video = videoRef.current;
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
-            await video.play();
-            frameTimerRef.current = setInterval(() => {
-              requestAnimationFrame(processVideoFrame);
-            }, FRAME_INTERVAL);
-            setIsInitialized(true);
-        };
+const startVideo = async () => {
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
 
-        const drawLandmarksScaled = (handResults, faceResults, ctx, video, canvas) => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Request a 640×580 stream (or as close as the camera supports)
+  const constraints = {
+    video: {
+      width:  { ideal: 640 },
+      height: { ideal: 580 },
+      aspectRatio: { ideal: 640 / 580 }
+    }
+  };
 
-            // Calculate scaling and positioning to maintain aspect ratio
-            const videoAspect = video.videoWidth / video.videoHeight;
-            const canvasAspect = canvas.width / canvas.height;
-            
-            let drawWidth, drawHeight, offsetX, offsetY;
-            
-            if (videoAspect > canvasAspect) {
-                // Video is wider than canvas - fit by height
-                drawHeight = canvas.height;
-                drawWidth = drawHeight * videoAspect;
-                offsetX = (canvas.width - drawWidth) / 2;
-                offsetY = 0;
-            } else {
-                // Video is taller than canvas - fit by width
-                drawWidth = canvas.width;
-                drawHeight = drawWidth / videoAspect;
-                offsetX = 0;
-                offsetY = (canvas.height - drawHeight) / 2;
-            }
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = stream;
+  await video.play();
 
-            ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
+  // Now video.videoWidth / video.videoHeight should be approx. 640×580
+  const videoWidth  = video.videoWidth;
+  const videoHeight = video.videoHeight;
 
-            // determine if nail biting is gonna occur
-            if (handResults.landmarks && faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
+  canvas.width  = videoWidth;
+  canvas.height = videoHeight;
+  video.width   = videoWidth;
+  video.height  = videoHeight;
 
-              // Save the current transformation matrix
-              ctx.save();
-              ctx.translate(offsetX, offsetY); // Apply transformation to match the video scaling
-              ctx.scale(drawWidth / canvas.width, drawHeight / canvas.height);
+  frameTimerRef.current = setInterval(() => {
+    requestAnimationFrame(processVideoFrame);
+  }, FRAME_INTERVAL);
 
-              const drawingUtils = new DrawingUtils(ctx);
-              
-              // draw mouth center
-              const mouthCenter = faceResults.faceLandmarks[0][13];
-              drawingUtils.drawLandmarks([mouthCenter], { color: '#00FFFF', lineWidth: 1 });
+  setIsInitialized(true);
+};
 
-              for (const handLandmarks of handResults.landmarks) {
-                const fingertipIndices = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky
 
-                for (const fingertipIndex of fingertipIndices) {
-                  const fingertip = handLandmarks[fingertipIndex]
-                  drawingUtils.drawLandmarks([fingertip], { color: '#FF0000', lineWidth: 1 });
-                }
-              }
-              // Restore the original transformation matrix
-              ctx.restore();
-            }
+
+    const drawLandmarksScaled = (handResults, faceResults, ctx, video, canvas) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw raw video frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      if (handResults.landmarks && faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
+        const drawingUtils = new DrawingUtils(ctx);
+
+        const mouthCenter = faceResults.faceLandmarks[0][13];
+        drawingUtils.drawLandmarks([mouthCenter], { color: '#00FFFF', lineWidth: 1 });
+
+        for (const handLandmarks of handResults.landmarks) {
+          const fingertipIndices = [4, 8, 12, 16, 20];
+          for (const idx of fingertipIndices) {
+            drawingUtils.drawLandmarks([handLandmarks[idx]], { color: '#FF0000', lineWidth: 1 });
+          }
         }
+      }
+    };
+
 
         /**
          * @returns {{handedness: string, finger: number, distance: number}|null}
@@ -224,9 +218,6 @@ export default function NailDetector({ onUpdate, onDetection }) {
             const handResults = handLandmarkerRef.current.detectForVideo(video, now);
             const faceResults = faceLandmarkerRef.current.detectForVideo(video, now);
 
-            // console.log('Hand Results:', handResults);
-            // console.log('Face Results:', faceResults);
-
             // will return a true / false representing if a nail biting moment happened
             detectTemporalNailBiting(handResults, faceResults);
             drawLandmarksScaled(handResults, faceResults, ctx, video, canvas);
@@ -257,46 +248,38 @@ export default function NailDetector({ onUpdate, onDetection }) {
     }
   }, [nailBiting]);
 
-    return (
-        <>
-        <div className="flex gap-4">
-            <div className="flex flex-col gap-4">
-                <div className="relative rounded-lg overflow-hidden shadow-lg w-[640px] h-[580px]">
-                    <video
-                        ref={videoRef}
-                        className="hidden"
-                        width="640"
-                        height="580"
-                        autoPlay
-                        muted
-                        playsInline
-                    />
-                    
-                    <canvas
-                        ref={canvasRef}
-                        width="640"
-                        height="580"
-                        className="absolute top-0 left-0 bg-[#1c1c1c]"
-                    />
+ return (
+  <div className="flex flex-col items-center w-full lg:w-2/3">
+    <div className="relative rounded-lg overflow-hidden shadow-lg w-full max-w-[640px]">
+      <video
+        ref={videoRef}
+        className="absolute top-0 left-0 opacity-0 pointer-events-none"
+        autoPlay
+        muted
+        playsInline
+      />
+      <canvas
+        ref={canvasRef}
+        className="w-full h-auto bg-[#1c1c1c]"
+      />
 
-                    <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-                        <div className={`px-3 py-1 rounded text-sm font-medium ${
-                        isInitialized ? 'bg-green-500 text-white' : 'bg-yellow-500 text-black'
-                        }`}>
-                        {isInitialized ? 'Active' : 'Loading...'}
-                        </div>
-                    </div>
-
-                    {nailBiting && (
-                    <div className="absolute top-4 left-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg animate-pulse">
-                        <div className="flex items-center justify-center">
-                        <span className="text-lg font-bold">⚠️ Nail Biting Detected</span>
-                        </div>
-                    </div>
-                    )}
-                </div>
-            </div>
+      <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+        <div className={`px-3 py-1 rounded text-sm font-medium ${
+          isInitialized ? 'bg-green-500 text-white' : 'bg-yellow-500 text-black'
+        }`}>
+          {isInitialized ? 'Active' : 'Loading...'}
         </div>
-        </>
-    )
+      </div>
+
+      {nailBiting && (
+        <div className="absolute top-4 left-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg animate-pulse">
+          <div className="flex items-center justify-center">
+            <span className="text-lg font-bold">⚠️ Nail Biting Detected</span>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
 }
