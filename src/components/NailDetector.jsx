@@ -250,7 +250,7 @@ const startVideo = async () => {
 
  return (
   <div className="flex flex-col items-center w-full lg:w-2/3">
-    <div className="relative rounded-lg overflow-hidden shadow-lg w-full max-w-[640px]">
+    <div className="relative rounded-lg overflow-hidden shadow-lg w-full max-w-[640px] aspect-video lg:aspect-[640/580]">
       <video
         ref={videoRef}
         className="absolute top-0 left-0 opacity-0 pointer-events-none"
