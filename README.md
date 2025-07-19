@@ -41,6 +41,7 @@ This project is a browser-based, real-time nail-biting detection application bui
 
 ##### Development
 `docker build -f dev.Dockerfile -t nail-dev .`
+
 ```
 docker run \
   -p 5173:5173 \

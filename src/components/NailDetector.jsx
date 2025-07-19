@@ -260,7 +260,7 @@ const startVideo = async () => {
       />
       <canvas
         ref={canvasRef}
-        className="w-full h-auto bg-[#1c1c1c]"
+        className="w-full h-full bg-[#1c1c1c]"
       />
 
       <div className="absolute bottom-4 right-4 flex flex-col gap-2">
