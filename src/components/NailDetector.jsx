@@ -121,7 +121,7 @@ const startVideo = async () => {
          */
         const detectNailBitingFrame = (handResults, faceResults) => {
 
-            const threshold = 0.08
+            const threshold = 0.12
             // determine if nail biting is gonna occur
             if (handResults.landmarks && faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
               
@@ -250,7 +250,7 @@ const startVideo = async () => {
 
  return (
   <div className="flex flex-col items-center w-full lg:w-2/3">
-    <div className="relative rounded-lg overflow-hidden shadow-lg w-full max-w-[640px] aspect-[4/3] lg:aspect-[640/580]">
+    <div className="relative rounded-lg overflow-hidden shadow-lg w-full max-w-[640px] aspect-[4/3] lg:aspect-[640/580] bg-[#1c1c1c]">
       <video
         ref={videoRef}
         className="absolute top-0 left-0 opacity-0 pointer-events-none"
@@ -260,7 +260,7 @@ const startVideo = async () => {
       />
       <canvas
         ref={canvasRef}
-        className="w-full h-full bg-[#1c1c1c]"
+        className="w-full h-auto"
       />
 
       <div className="absolute bottom-4 right-4 flex flex-col gap-2">
