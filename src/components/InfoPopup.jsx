@@ -7,6 +7,7 @@ export default function InfoPopup({ closePopup }) {
   const cardText = [
     "Please make sure your camera is positioned so that your face and hands are visible.",
     "Make sure the room is well lit for best accuracy.",
+    "Please allow your camera to be enabled for this site.",
     "This detector will be inactive if you leave this tab.",
   ];
 
