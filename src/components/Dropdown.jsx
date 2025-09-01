@@ -17,7 +17,7 @@ export default function Dropdown ({ onSelect, selectedWindow }) {
       {/* Toggle */}
       <button
         type="button"
-        className="w-full bg-green-400 text-black flex gap-2 justify-between items-center"
+        className="buttonDashboard w-full bg-green-400 text-black flex gap-2 justify-between items-center"
         onClick={() => setDropdownActive(v => !v)}
         aria-haspopup="menu"
         aria-expanded={dropdownActive}
@@ -48,7 +48,7 @@ export default function Dropdown ({ onSelect, selectedWindow }) {
               key={option}
               type="button"
               role="menuitem"
-              className="w-full px-4 py-2"
+              className="w-full px-4 py-2 buttonDashboard"
               onClick={() => handleDropdown(option)}
             >
               {option} min

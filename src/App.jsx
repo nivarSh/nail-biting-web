@@ -2,8 +2,20 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import NailDetector from './components/NailDetector'
 import Dashboard from './components/Dashboard'
+import InfoPopup from './components/InfoPopup'
 
 function App() {
+
+  const [hasSeenInfo, setHasSeenInfo] = useState(() => {
+    return localStorage.getItem("hasSeenInfo") === "true";
+  });
+
+  const closePopup = () => {
+    localStorage.setItem("hasSeenInfo", "true");
+    setHasSeenInfo(true);
+  };
+
+  // Need to initially set popupFlag to true for in localStorage
 
   // Lift state up from NailDetector into Dashboard. useRef Object
   const [detectionData, setDetectionData] = useState({
@@ -25,7 +37,7 @@ function App() {
     localStorage.setItem('nailLogs', JSON.stringify(eventLogs))
   }, [eventLogs])
 
-  const maxSize = 60 * 60 * 1000  // 60 minutes
+  const maxSize = 60 * 60 * 1000  // 60 minutesS
 
   // 3. callback you hand to your detector
   const handleDetection = (e) => {
@@ -37,10 +49,9 @@ function App() {
     })
   }
 
-
-
   return (
     <div className="max-w-[640px] lg:max-w-full mx-auto">
+      {!hasSeenInfo && <InfoPopup closePopup={closePopup}/>}
       <div className="mb-4 text-center text-sm text-gray-600">
         <p>Red dots: Fingertips • Blue dot: Mouth center</p>
         <p>Keep your hands and face visible for best detection.</p>

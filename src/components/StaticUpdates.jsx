@@ -22,7 +22,7 @@ function StaticUpdates ({ logs }) {
                     <h3 className="text-green-400 font-bold text-5xl lg:text-6xl">{recentLogs.length}</h3>
                 </div>
                     <div className="flex flex-col align-right">
-                    <p className="text-sm lg:text-lg  text-gray-500 mb-4 lg:mb-2 text-right">Time Interval</p>
+                    <p className="text-md lg:text-lg  text-gray-500 mb-4 lg:mb-2 text-right">Time Interval</p>
                     <Dropdown onSelect={setSelectedWindow} selectedWindow={selectedWindow} />
                 </div>
             </div>
