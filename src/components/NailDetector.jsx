@@ -24,6 +24,10 @@ export default function NailDetector({ onUpdate, onDetection }) {
     const [nailBiting, setNailBiting] = useState(false)
     const [isInitialized, setIsInitialized] = useState(false);
 
+    //debugging arc
+    const [dynamicThreshold, setDynamicThreshold] = useState(0.00)
+    const [distance, setDistance] = useState(0.00)
+
     // Temporal tracking state
     const nailBitingStateRef = useRef({
       detectionHistory: [], // Rolling window of recent detections
@@ -121,7 +125,26 @@ const startVideo = async () => {
          */
         const detectNailBitingFrame = (handResults, faceResults) => {
 
-            const threshold = 0.12
+            // need to develop dynamic threshold since the coordinates need to be normalized
+            // Example: If my face is close to the camera the distance between fingertip to mouth is larger (threshold larger), 
+            // if my face is far from camera the distance is smaller (threshold smaller).
+            // Therefore, based off distance of face from camera (the distance of left mouth end to right mouth end)
+
+            // pick two stable eye landmarks (outer corners)
+
+            let threshold = 0.12;
+            if (faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
+              const L_EYE = faceResults.faceLandmarks[0][33];   // left eye outer corner
+              const R_EYE = faceResults.faceLandmarks[0][263];  // right eye outer corner
+              const faceScale = Math.hypot(L_EYE.x - R_EYE.x, L_EYE.y - R_EYE.y);
+
+              const proximityRatio = 0.30;     // start ~0.22–0.30, tune for app
+              const fallback = 0.12;                   // your previous constant
+              threshold = (faceScale > 1e-4) ? faceScale * proximityRatio : fallback;
+
+              setDynamicThreshold(threshold)
+            }
+
             // determine if nail biting is gonna occur
             if (handResults.landmarks && faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
               
@@ -141,13 +164,16 @@ const startVideo = async () => {
                 for (const fingertipIndex of fingertipIndices) {
                   const fingertipData = handLandmarks[fingertipIndex]
 
-                  const distance = calculate3DDistance(fingertipData, mouthCenter)
+                  const distance = dist2D(fingertipData, mouthCenter)
 
+                  if (fingertipIndex == 8) {
+                    // console.log(`DISTANCE: ${distance}`)
+                    setDistance(distance)     
+                  }
+
+                  // const depthBad = isDepthClose(faceResults.faceLandmarks[0], handResults.landmarks[hIdx]); // margin defaults to 0.14
                   if (distance < threshold) {
                     // console.log(`NAIL BITING DETECTED! Fingertip ${fingertipIndex}`);
-
-                    // store which fingerTip it is (easy)
-                    // store the handedness
                     return { handedness, finger: fingertipIndex, distance };
                   }
                 }
@@ -207,7 +233,6 @@ const startVideo = async () => {
         }
 
         const processVideoFrame = async () => {
-            console.count("Frame")
             const video = videoRef.current;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
@@ -223,12 +248,51 @@ const startVideo = async () => {
             drawLandmarksScaled(handResults, faceResults, ctx, video, canvas);
           };
 
-          function calculate3DDistance(point1, point2, zWeight = 3) {
-            const dx = point1.x - point2.x;
-            const dy = point1.y - point2.y;
-            const dz = (point1.z - point2.z) * zWeight;
-            return Math.sqrt(dx*dx + dy*dy + dz*dz);
+          function dist2D(a, b) {
+            const dx = a.x - b.x, dy = a.y - b.y;
+            return Math.hypot(dx, dy);
           }
+          
+          // // --- Simple 2D distance + tiny "non-zero" guard ---
+          // const hypot2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+          // const nz = (v, eps = 1e-6) => (Math.abs(v) < eps ? (v < 0 ? -eps : eps) : v);
+
+          // // --- Face: normalized mouth depth relative to eye width ---
+          // function normalizedFaceDepth(faceLm) {
+          //   // Use outer eye corners for a stable scale, even if mouth is partially occluded
+          //   const L_EYE = faceLm[33];
+          //   const R_EYE = faceLm[263];
+          //   const eyeW = nz(hypot2(L_EYE, R_EYE));
+
+          //   // Mouth mid (you can average 13/14 if you prefer)
+          //   const mouthMid = faceLm[13];
+          //   // Face z is relative to the face ROI; make it unitless by dividing by face size
+          //   return mouthMid.z / eyeW;
+          // }
+
+          // // --- Hand: normalized fingertip depth relative to palm width ---
+          // function normalizedFingerDepth(handLm) {
+          //   // Palm width proxy between index MCP (5) and pinky MCP (17)
+          //   const palmW = nz(hypot2(handLm[5], handLm[17]));
+
+          //   // Depth of index tip relative to wrist cancels per-frame hand ROI offsets
+          //   const tipZ = handLm[8].z;
+          //   const wristZ = handLm[0].z;
+          //   return (tipZ) / palmW;
+          // }
+
+          // // --- One small gate to compare the two unitless depths ---
+          // function isDepthClose(faceLm, handLm, margin = 0.24) {
+          //   const fz = normalizedFaceDepth(faceLm);
+          //   const hz = normalizedFingerDepth(handLm);
+
+          //   const diff = hz - fz;
+
+          //   const FRONT_ALLOW = margin * 1.2; // e.g., 0.168 if margin=0.14
+          //   const BEHIND_ALLOW = margin * 0.8; // e.g., 0.112
+
+          //   return diff >= -FRONT_ALLOW && diff <= BEHIND_ALLOW;
+          // }
 
           audioRef.current = new Audio('/bell.wav');
           audioRef.current.load();
@@ -278,6 +342,11 @@ const startVideo = async () => {
           </div>
         </div>
       )}
+    </div>
+    <div>
+      Dynamic Threshold: {dynamicThreshold.toFixed(4)}
+      <br />
+      Index Finger Distance: {distance.toFixed(4)}
     </div>
   </div>
 );
