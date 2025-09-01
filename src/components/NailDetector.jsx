@@ -25,8 +25,8 @@ export default function NailDetector({ onUpdate, onDetection }) {
     const [isInitialized, setIsInitialized] = useState(false);
 
     //debugging arc
-    const [dynamicThreshold, setDynamicThreshold] = useState(0.00)
-    const [distance, setDistance] = useState(0.00)
+    // const [dynamicThreshold, setDynamicThreshold] = useState(0.00)
+    // const [distance, setDistance] = useState(0.00)
 
     // Temporal tracking state
     const nailBitingStateRef = useRef({
@@ -142,7 +142,7 @@ const startVideo = async () => {
               const fallback = 0.12;                   // your previous constant
               threshold = (faceScale > 1e-4) ? faceScale * proximityRatio : fallback;
 
-              setDynamicThreshold(threshold)
+              // setDynamicThreshold(threshold)
             }
 
             // determine if nail biting is gonna occur
@@ -166,10 +166,10 @@ const startVideo = async () => {
 
                   const distance = dist2D(fingertipData, mouthCenter)
 
-                  if (fingertipIndex == 8) {
-                    // console.log(`DISTANCE: ${distance}`)
-                    setDistance(distance)     
-                  }
+                  // if (fingertipIndex == 8) {
+                  //   // console.log(`DISTANCE: ${distance}`)
+                  //   setDistance(distance)     
+                  // }
 
                   // const depthBad = isDepthClose(faceResults.faceLandmarks[0], handResults.landmarks[hIdx]); // margin defaults to 0.14
                   if (distance < threshold) {
@@ -343,11 +343,11 @@ const startVideo = async () => {
         </div>
       )}
     </div>
-    <div>
+    {/* <div>
       Dynamic Threshold: {dynamicThreshold.toFixed(4)}
       <br />
       Index Finger Distance: {distance.toFixed(4)}
-    </div>
+    </div> */}
   </div>
 );
 
